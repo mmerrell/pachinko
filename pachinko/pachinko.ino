@@ -5,30 +5,16 @@
   #include <avr/power.h>
 #endif
 
-#define PIN 6
-#define WAIT 50
-#define MAX_BALLS 4
+#define NEOPIXEL_PIN 6
+#define WAIT 5
+#define MAX_BALLS 7
+#define TOTAL_PATHS 5
 
 
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
 unsigned char start_button_state = HIGH;
 
-
-//segments
-//segment 0:  {  0,  75} - connects to 1
-//segment 1:  {120,  34} - connects to 2
-//segment 2:  {210,  30} - connects to 3
-//segment 3:  {100,  20} - Terminal
-
-// Parameter 1 = number of pixels in strip
-// Parameter 2 = Arduino pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 //GOOD
 int path0[][2] = {
@@ -57,6 +43,7 @@ int path3[][2] = {
   {221, 19}
 };
 
+//GOOD
 int path4[][2] = {
   {0, 78},
   {77, -5},
@@ -64,12 +51,11 @@ int path4[][2] = {
   {153, -30}
 };
 
-
 class Path {
   private:
     int numSegments;
     int (*segments)[2];
-    int *flatPath;
+    int flatPath[200];
     int flatPathLength;
 
   public:
@@ -77,18 +63,18 @@ class Path {
       this->numSegments = numSegments;
       this->segments = segments;
 
-      int tempFlatPathLength = 0;
+      flatPathLength = 0;
       for (int i=0; i<numSegments; i++) {
-        tempFlatPathLength += abs(segments[i][1]);
+        flatPathLength += abs(segments[i][1]);
       }
-      this->flatPathLength = tempFlatPathLength;
+      this->flatPathLength = flatPathLength;
 
-//      Serial.print("Segments: ");
-//      Serial.println(numSegments);
-//      Serial.print("Flat path length: ");
-//      Serial.println(this->flatPathLength);
+      Serial.print("Segments: ");
+      Serial.println(numSegments);
+      Serial.print("Flat path length: ");
+      Serial.println(this->flatPathLength);
 
-      int flatPath[sizeof(int) * flatPathLength];
+//      int flatPath[sizeof(int) * flatPathLength];
 
       //Flatten the path for this ball
       // Do it once at the beginning, so nothing needs to be calculated later
@@ -132,7 +118,7 @@ class Path {
         }
       }
       
-      this->flatPath = flatPath;
+//      this->flatPath = flatPath;
     }
 
     int* getFlatPath() {
@@ -142,6 +128,7 @@ class Path {
     int getFlatPathLength() {
       return flatPathLength;
     }
+
 };
 
 class Ball {
@@ -153,10 +140,11 @@ class Ball {
     int flatPathLength;                      //
     const int numSegments = 1;
     boolean active;                          //Whether or not this ball is currently active
-//    Path path;
   
   public:
-    Ball() {}
+    Ball() {
+      this->currPosition = 0;  
+    }
     
     Ball(uint32_t color) {
       this->active = true;
@@ -169,22 +157,33 @@ class Ball {
       int (*pathPtr)[2];
       int pathSegments;
 //      int ballPathSelector = 3;
-      int ballPathSelector = random(0, 3);
+      int ballPathSelector = random(0, TOTAL_PATHS);
 
       Serial.print("Choosing path: path");
       Serial.println(ballPathSelector);
-      if (ballPathSelector % 3 == 0) {
+      if (ballPathSelector % TOTAL_PATHS == 0) {
         pathPtr = path0;
         pathSegments = sizeof(path0) / sizeof(int[2]);
       }
-      if (ballPathSelector % 3 == 1) {
+      if (ballPathSelector % TOTAL_PATHS == 1) {
         pathPtr = path1;
         pathSegments = sizeof(path1) / sizeof(int[2]);
       }
-      if (ballPathSelector % 3 == 2) {
+      if (ballPathSelector % TOTAL_PATHS == 2) {
         pathPtr = path2;
         pathSegments = sizeof(path2) / sizeof(int[2]);
       }
+
+      if (ballPathSelector % TOTAL_PATHS == 3) {
+        pathPtr = path3;
+        pathSegments = sizeof(path3) / sizeof(int[2]);
+      }
+
+      if (ballPathSelector % TOTAL_PATHS == 4) {
+        pathPtr = path4;
+        pathSegments = sizeof(path4) / sizeof(int[2]);
+      }
+
       //Embarassing part over
 //        pathPtr = path1;
 //        pathSegments = sizeof(path1) / sizeof(int[2]);
@@ -195,8 +194,8 @@ class Ball {
       Path path(pathSegments, pathPtr);
       this->flatPath = path.getFlatPath();
       this->flatPathLength = path.getFlatPathLength();
-      Serial.print("INSIDE BALL: Flat path length: ");
-      Serial.println(path.getFlatPathLength());
+//      Serial.print("INSIDE BALL: Flat path length: ");
+//      Serial.println(path.getFlatPathLength());
     }
 
     boolean isActive() {
@@ -222,6 +221,13 @@ class Ball {
     uint32_t getColor() {
       return color;
     }
+
+    void printVitals() {
+      Serial.print("Current position: ");
+      Serial.print(currPosition);
+      Serial.print(", ");
+      Serial.println(flatPath[currPosition]);
+    }
     
     void printFlatPath() {
       Serial.print("flatPathLength: ");
@@ -234,18 +240,11 @@ class Ball {
       }
     }
 
+
     void inc() {
-//      Serial.print("Current position: ");
-//      Serial.print(currPosition);
-//      Serial.print(", ");
-//      Serial.println(flatPath[currPosition]);
       currPosition++;
       if (currPosition >= flatPathLength) {
         this->active = false;
-//        Serial.print("Setting ball inactive: ");
-//        Serial.println(this->active);
-//        Serial.print("Last pixel lit: ");
-//        Serial.println(flatPath[currPosition - 1]);
         return;
       }
     }
@@ -274,10 +273,10 @@ void update_io_pins() {
 }
 
 
-Queue balls(sizeof(Ball), MAX_BALLS, FIFO, true);
+Queue ballQueue(sizeof(Ball), MAX_BALLS, FIFO, false);
 
 void setup() {
-//  Serial.begin(9600);
+  Serial.begin(9600);
 
   init_io_pins();
 
@@ -327,53 +326,59 @@ void loop() {
 }
 
 void updateBalls() {
-  if (balls.isEmpty()) {
-//    Serial.println("Nothing to do. No balls");
-//    ballLaunch(colorAry[0]);
+  if (ballQueue.isEmpty()) {
     return;
   }
   
-  Ball ball;
-  for (int i=0; i<balls.getCount(); i++) {
-    if (balls.pop(&ball)) {
-  //    Serial.print("ball isActive before if statement: ");
-  //    Serial.println(ball.isActive());
+  int ballCount = ballQueue.getCount();
+  
+  for (int i=0; i<ballCount; i++) {
+    Ball ball;
+    if (ballQueue.pop(&ball)) {
+//      Serial.print("After popping ball from queue: ");
+      ball.printVitals();
+//      ball.printFlatPath();
+
       if (ball.isActive()) {
         ball.inc();
-  //      Serial.print("ball isActive after increment: ");
-  //      Serial.println(ball.isActive());
       }
     }
-//      Serial.println("Pushing ball back onto queue");
-    balls.push(&ball);
+    ballQueue.push(&ball);
   }
 }
 
 void updateLights() {
-    for (int i=0; i<balls.getCount(); i++) {
-      Ball ball;
-      if (balls.pop(&ball)) {
-        if (ball.isActive()) {
-//          Serial.println("Lighting up");
-          strip.setPixelColor(ball.getCurrPixel(), ball.getColor());
-          strip.setPixelColor(ball.getPrevPixel(), strip.Color(10, 10, 10));
-          strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-          balls.push(&ball);
-        } else {
-//          Serial.println("Shutting down the last few pixels");
-          strip.setPixelColor(ball.getCurrPixel(), strip.Color(0, 0, 0));
-          strip.setPixelColor(ball.getPrevPixel(), strip.Color(0, 0, 0));
-          strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-        }
+  int ballCount = ballQueue.getCount();
+  for (int i=0; i<ballCount; i++) {
+    Ball ball;
+    if (ballQueue.pop(&ball)) {
+      if (ball.isActive()) {
+//        Serial.print("Setting current px ");
+//        Serial.print(ball.getCurrPixel());
+//        Serial.print(", prev px: ");
+//        Serial.print(ball.getPrevPixel());
+//        Serial.print(", trailing px: ");
+//        Serial.println(ball.getTrailingPixel());
+        strip.setPixelColor(ball.getCurrPixel(), ball.getColor());
+        strip.setPixelColor(ball.getPrevPixel(), strip.Color(10, 10, 10));
+        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
+        ballQueue.push(&ball);
+      } else {
+        Serial.println("Shutting down the last few pixels");
+        strip.setPixelColor(ball.getCurrPixel(), strip.Color(0, 0, 0));
+        strip.setPixelColor(ball.getPrevPixel(), strip.Color(0, 0, 0));
+        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
       }
     }
+  }
 
-    strip.show();
+  strip.show();
 }
 
 void ballLaunch(uint32_t color) {
   Ball ball(color);
-  balls.push(&ball);
+  ballQueue.push(&ball);
+  Serial.println("Launching!!");
 }
 
 
