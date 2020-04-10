@@ -7,7 +7,7 @@
 
 #define NEOPIXEL_PIN 6
 #define WAIT 5
-#define MAX_BALLS 7
+#define MAX_BALLS 5
 #define TOTAL_PATHS 5
 
 
@@ -140,6 +140,7 @@ class Ball {
     int flatPathLength;                      //
     const int numSegments = 1;
     boolean active;                          //Whether or not this ball is currently active
+    int ballPathSelector;
   
   public:
     Ball() {
@@ -151,13 +152,11 @@ class Ball {
       this->color = color;
       this->currPosition = 0;
 
-
-      
       //This is all embarrassing. I need to learn how to work with pointers
       int (*pathPtr)[2];
       int pathSegments;
 //      int ballPathSelector = 3;
-      int ballPathSelector = random(0, TOTAL_PATHS);
+      this->ballPathSelector = random(0, TOTAL_PATHS);
 
       Serial.print("Choosing path: path");
       Serial.println(ballPathSelector);
@@ -188,14 +187,9 @@ class Ball {
 //        pathPtr = path1;
 //        pathSegments = sizeof(path1) / sizeof(int[2]);
 
-
-      
-      
       Path path(pathSegments, pathPtr);
       this->flatPath = path.getFlatPath();
       this->flatPathLength = path.getFlatPathLength();
-//      Serial.print("INSIDE BALL: Flat path length: ");
-//      Serial.println(path.getFlatPathLength());
     }
 
     boolean isActive() {
@@ -245,8 +239,16 @@ class Ball {
       currPosition++;
       if (currPosition >= flatPathLength) {
         this->active = false;
+        strip.setPixelColor(getCurrPixel(), strip.Color(0, 0, 0));
+        strip.setPixelColor(getPrevPixel(), strip.Color(0, 0, 0));
+        strip.setPixelColor(getTrailingPixel(), strip.Color(0, 0, 0));
+//        strip.show();
         return;
       }
+      strip.setPixelColor(getCurrPixel(), getColor());
+      strip.setPixelColor(getPrevPixel(), strip.Color(10, 10, 10));
+      strip.setPixelColor(getTrailingPixel(), strip.Color(0, 0, 0));
+//      strip.show();
     }
 };
 
@@ -268,18 +270,15 @@ void init_io_pins() {
 
 void update_io_pins() {
   start_button_state = digitalRead(START_BUTTON_PIN);
-//  Serial.print("Start Button State: ");
-//  Serial.println(start_button_state);
 }
 
 
-Queue ballQueue(sizeof(Ball), MAX_BALLS, FIFO, false);
+Queue ballQueue(sizeof(Ball), MAX_BALLS, FIFO, true);
 
 void setup() {
   Serial.begin(9600);
 
   init_io_pins();
-
 
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
@@ -318,10 +317,10 @@ void loop() {
   }
 
   updateBalls();
-  updateLights();
 //  lightPath(path0, strip.Color(20,20,20));
   counter++;
   ignore_start_button_counter++;
+  strip.show();
   delay(WAIT);
 }
 
@@ -331,48 +330,22 @@ void updateBalls() {
   }
   
   int ballCount = ballQueue.getCount();
+  Ball balls[ballCount];
   
   for (int i=0; i<ballCount; i++) {
-    Ball ball;
-    if (ballQueue.pop(&ball)) {
-//      Serial.print("After popping ball from queue: ");
-      ball.printVitals();
-//      ball.printFlatPath();
-
-      if (ball.isActive()) {
-        ball.inc();
-      }
-    }
-    ballQueue.push(&ball);
+    ballQueue.pop(&balls[i]);
   }
-}
 
-void updateLights() {
-  int ballCount = ballQueue.getCount();
   for (int i=0; i<ballCount; i++) {
-    Ball ball;
-    if (ballQueue.pop(&ball)) {
-      if (ball.isActive()) {
-//        Serial.print("Setting current px ");
-//        Serial.print(ball.getCurrPixel());
-//        Serial.print(", prev px: ");
-//        Serial.print(ball.getPrevPixel());
-//        Serial.print(", trailing px: ");
-//        Serial.println(ball.getTrailingPixel());
-        strip.setPixelColor(ball.getCurrPixel(), ball.getColor());
-        strip.setPixelColor(ball.getPrevPixel(), strip.Color(10, 10, 10));
-        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-        ballQueue.push(&ball);
-      } else {
-        Serial.println("Shutting down the last few pixels");
-        strip.setPixelColor(ball.getCurrPixel(), strip.Color(0, 0, 0));
-        strip.setPixelColor(ball.getPrevPixel(), strip.Color(0, 0, 0));
-        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-      }
+    if (balls[i].isActive()) {
+      balls[i].inc();
     }
   }
 
-  strip.show();
+  //push it back into the queue no matter what--updateLights() has the job of removing balls permanently
+  for (int i=0; i<ballCount; i++) {
+    ballQueue.push(&balls[i]);
+  }
 }
 
 void ballLaunch(uint32_t color) {
@@ -380,8 +353,6 @@ void ballLaunch(uint32_t color) {
   ballQueue.push(&ball);
   Serial.println("Launching!!");
 }
-
-
 
 
 //void singleBall(uint32_t c) {
