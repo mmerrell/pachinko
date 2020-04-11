@@ -1,5 +1,5 @@
 #include <Adafruit_NeoPixel.h>
-#include <cppQueue.h>
+#include <LinkedList.h>
 
 #ifdef __AVR__
   #include <avr/power.h>
@@ -81,44 +81,20 @@ class Path {
       int flatIndex=0;
       
       for (int i=0; i<numSegments; i++) {
-//        Serial.print("Segment: ");
-//        Serial.print(i);
-//        Serial.print(", Segment First Pixel: ");
-//        Serial.print(segments[i][0]);
-//        Serial.print(", Segment Length: ");
-//        Serial.println(segments[i][1]);
         if (segments[i][1] < 0) {
           for (int index=0; index>segments[i][1]; index--) {
             int value = segments[i][0] + index;
             flatPath[flatIndex] = value;
-//            Serial.print("Flat array index: ");
-//            Serial.println(flatIndex);
-//            Serial.print("Segment index: ");
-//            Serial.print(index);
-//            Serial.print(", Pixel value: ");
-//            Serial.print(value);
-//            Serial.print(", Real Pixel value: ");
-//            Serial.println(flatPath[flatIndex]);
             flatIndex++;
           }
         } else {
           for (int index=0; index<segments[i][1]; index++) {
             int value = segments[i][0] + index;
             flatPath[flatIndex] = value;
-//            Serial.print("Flat array index: ");
-//            Serial.println(flatIndex);
-//            Serial.print("Segment index: ");
-//            Serial.print(index);
-//            Serial.print(", Pixel value: ");
-//            Serial.print(value);
-//            Serial.print(", Real Pixel value: ");
-//            Serial.println(flatPath[flatIndex]);
             flatIndex++;
           }
         }
       }
-      
-//      this->flatPath = flatPath;
     }
 
     int* getFlatPath() {
@@ -128,7 +104,6 @@ class Path {
     int getFlatPathLength() {
       return flatPathLength;
     }
-
 };
 
 class Ball {
