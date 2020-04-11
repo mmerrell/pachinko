@@ -1,5 +1,5 @@
 #include <Adafruit_NeoPixel.h>
-#include <cppQueue.h>
+#include <LinkedList.h>
 
 #ifdef __AVR__
   #include <avr/power.h>
@@ -9,10 +9,10 @@
 #define WAIT 5
 #define MAX_BALLS 7
 #define TOTAL_PATHS 5
-
+#define TIME_BETWEEN_LAUNCH 50  //This is the number of loops, not the actual time
 
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
-unsigned char start_button_state = HIGH;
+unsigned char startButtonState = HIGH;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -74,51 +74,25 @@ class Path {
       Serial.print("Flat path length: ");
       Serial.println(this->flatPathLength);
 
-//      int flatPath[sizeof(int) * flatPathLength];
-
       //Flatten the path for this ball
       // Do it once at the beginning, so nothing needs to be calculated later
       int flatIndex=0;
       
       for (int i=0; i<numSegments; i++) {
-//        Serial.print("Segment: ");
-//        Serial.print(i);
-//        Serial.print(", Segment First Pixel: ");
-//        Serial.print(segments[i][0]);
-//        Serial.print(", Segment Length: ");
-//        Serial.println(segments[i][1]);
         if (segments[i][1] < 0) {
           for (int index=0; index>segments[i][1]; index--) {
             int value = segments[i][0] + index;
             flatPath[flatIndex] = value;
-//            Serial.print("Flat array index: ");
-//            Serial.println(flatIndex);
-//            Serial.print("Segment index: ");
-//            Serial.print(index);
-//            Serial.print(", Pixel value: ");
-//            Serial.print(value);
-//            Serial.print(", Real Pixel value: ");
-//            Serial.println(flatPath[flatIndex]);
             flatIndex++;
           }
         } else {
           for (int index=0; index<segments[i][1]; index++) {
             int value = segments[i][0] + index;
             flatPath[flatIndex] = value;
-//            Serial.print("Flat array index: ");
-//            Serial.println(flatIndex);
-//            Serial.print("Segment index: ");
-//            Serial.print(index);
-//            Serial.print(", Pixel value: ");
-//            Serial.print(value);
-//            Serial.print(", Real Pixel value: ");
-//            Serial.println(flatPath[flatIndex]);
             flatIndex++;
           }
         }
       }
-      
-//      this->flatPath = flatPath;
     }
 
     int* getFlatPath() {
@@ -262,34 +236,32 @@ void lightPath() {
 }
 
 //Init all the pins
-void init_io_pins() {
+void initIoPins() {
   pinMode(START_BUTTON_PIN, INPUT_PULLUP);
 }
 
-void update_io_pins() {
-  start_button_state = digitalRead(START_BUTTON_PIN);
-//  Serial.print("Start Button State: ");
-//  Serial.println(start_button_state);
+void initLights() {
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+}
+
+void updateIoPins() {
+  startButtonState = digitalRead(START_BUTTON_PIN);
 }
 
 
-Queue ballQueue(sizeof(Ball), MAX_BALLS, FIFO, false);
+LinkedList<Ball*> ballList = LinkedList<Ball*>();
 
 void setup() {
-  Serial.begin(9600);
+//  Serial.begin(9600);
 
-  init_io_pins();
-
-
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
-
-//  lightPath();
+  initIoPins();
+  initLights();
 }
 
 double counter = 0;
-double ignore_start_button_counter = 0;
-boolean start_button_low;
+double ignoreStartButtonCounter = 0;
+boolean startButtonLow;
 
 uint32_t getRandomBallColor() {
   uint32_t colorAry[5] = {
@@ -304,15 +276,15 @@ uint32_t getRandomBallColor() {
 }
 
 void loop() {
-  update_io_pins();
-  if (ignore_start_button_counter >= 50) {
-    if (start_button_state == LOW) {
-      start_button_low = true;
+  updateIoPins();
+  if (ignoreStartButtonCounter >= TIME_BETWEEN_LAUNCH) {
+    if (startButtonState == LOW) {
+      startButtonLow = true;
     } else {
-      if (start_button_low) {
-        start_button_low = false;
+      if (startButtonLow) {
+        startButtonLow = false;
         ballLaunch(getRandomBallColor());
-        ignore_start_button_counter = 0;
+        ignoreStartButtonCounter = 0;
       }
     }
   }
@@ -321,54 +293,45 @@ void loop() {
   updateLights();
 //  lightPath(path0, strip.Color(20,20,20));
   counter++;
-  ignore_start_button_counter++;
+  ignoreStartButtonCounter++;
   delay(WAIT);
 }
 
 void updateBalls() {
-  if (ballQueue.isEmpty()) {
+  if (!ballList.size()) {
     return;
   }
-  
-  int ballCount = ballQueue.getCount();
-  
-  for (int i=0; i<ballCount; i++) {
-    Ball ball;
-    if (ballQueue.pop(&ball)) {
-//      Serial.print("After popping ball from queue: ");
-      ball.printVitals();
-//      ball.printFlatPath();
 
-      if (ball.isActive()) {
-        ball.inc();
-      }
+  Ball *ball;
+  int ballCount = ballList.size();
+  for (int i=0; i<ballCount; i++) {
+    ball = ballList.get(i);
+    ball->printVitals();
+
+    if (ball->isActive()) {
+      ball->inc();
     }
-    ballQueue.push(&ball);
   }
 }
 
+
 void updateLights() {
-  int ballCount = ballQueue.getCount();
+  int ballCount = ballList.size();
+  Ball *ball;
+
   for (int i=0; i<ballCount; i++) {
-    Ball ball;
-    if (ballQueue.pop(&ball)) {
-      if (ball.isActive()) {
-//        Serial.print("Setting current px ");
-//        Serial.print(ball.getCurrPixel());
-//        Serial.print(", prev px: ");
-//        Serial.print(ball.getPrevPixel());
-//        Serial.print(", trailing px: ");
-//        Serial.println(ball.getTrailingPixel());
-        strip.setPixelColor(ball.getCurrPixel(), ball.getColor());
-        strip.setPixelColor(ball.getPrevPixel(), strip.Color(10, 10, 10));
-        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-        ballQueue.push(&ball);
-      } else {
-        Serial.println("Shutting down the last few pixels");
-        strip.setPixelColor(ball.getCurrPixel(), strip.Color(0, 0, 0));
-        strip.setPixelColor(ball.getPrevPixel(), strip.Color(0, 0, 0));
-        strip.setPixelColor(ball.getTrailingPixel(), strip.Color(0, 0, 0));
-      }
+    ball = ballList.get(i);
+    if (ball->isActive()) {
+      strip.setPixelColor(ball->getCurrPixel(), ball->getColor());
+      strip.setPixelColor(ball->getPrevPixel(), strip.Color(10, 10, 10));
+      strip.setPixelColor(ball->getTrailingPixel(), strip.Color(0, 0, 0));
+    } else {
+      Serial.println("Shutting down the last few pixels");
+      strip.setPixelColor(ball->getCurrPixel(), strip.Color(0, 0, 0));
+      strip.setPixelColor(ball->getPrevPixel(), strip.Color(0, 0, 0));
+      strip.setPixelColor(ball->getTrailingPixel(), strip.Color(0, 0, 0));
+      ballList.remove(i);
+      delete(ball);
     }
   }
 
@@ -376,128 +339,7 @@ void updateLights() {
 }
 
 void ballLaunch(uint32_t color) {
-  Ball ball(color);
-  ballQueue.push(&ball);
+  Ball *ball = new Ball(color);
+  ballList.add(ball);
   Serial.println("Launching!!");
 }
-
-
-
-
-//void singleBall(uint32_t c) {
-//  for (int seg=0; seg<4; seg++) {
-//    for(uint16_t px=path0[seg][0]; px<(path0[seg][0] + path0[seg][1]); px++) {
-//      strip.setPixelColor(px, c);
-//      strip.setPixelColor(px-1, strip.Color(10, 10, 10));
-//      strip.setPixelColor(px-2, strip.Color(0, 0, 0));
-//      strip.show();
-//      delay(WAIT);
-//    }
-//    int px = path0[seg][0] + path0[seg][1];
-//    strip.setPixelColor(px-1, strip.Color(0, 0, 0));
-//    strip.setPixelColor(px-2, strip.Color(0, 0, 0));
-//    strip.show();
-//  }
-//}
-
-
-
-
-
-//  colorWipe(strip.Color(255, 0, 0), WAIT); // Red
-//  colorWipe(strip.Color(0, 255, 0), WAIT); // Green
-//  colorWipe(strip.Color(0, 0, 255), WAIT); // Blue
-//colorWipe(strip.Color(0, 0, 0, 255), WAIT); // White RGBW
-  // Send a theater pixel chase in...
-//  theaterChase(strip.Color(127, 127, 127), WAIT); // White
-//  theaterChase(strip.Color(127, 0, 0), WAIT); // Red
-//  theaterChase(strip.Color(0, 0, 127), WAIT); // Blue
-
-//  rainbow(20);
-//  rainbowCycle(20);
-//  theaterChaseRainbow(50);
-
-// Fill the dots one after the other with a color
-//void colorWipe(uint32_t c, uint8_t wait) {
-//  for(uint16_t i=0; i<strip.numPixels(); i++) {
-//    strip.setPixelColor(i, c);
-//    strip.show();
-//    delay(wait);
-//  }
-//}
-//
-//void rainbow(uint8_t wait) {
-//  uint16_t i, j;
-//
-//  for(j=0; j<256; j++) {
-//    for(i=0; i<strip.numPixels(); i++) {
-//      strip.setPixelColor(i, Wheel((i+j) & 255));
-//    }
-//    strip.show();
-//    delay(wait);
-//  }
-//}
-//
-//// Slightly different, this makes the rainbow equally distributed throughout
-//void rainbowCycle(uint8_t wait) {
-//  uint16_t i, j;
-//
-//  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
-//    for(i=0; i< strip.numPixels(); i++) {
-//      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-//    }
-//    strip.show();
-//    delay(wait);
-//  }
-//}
-//
-////Theatre-style crawling lights.
-//void theaterChase(uint32_t c, uint8_t wait) {
-//  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
-//    for (int q=0; q < 3; q++) {
-//      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-//        strip.setPixelColor(i+q, c);    //turn every third pixel on
-//      }
-//      strip.show();
-//
-//      delay(wait);
-//
-//      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-//        strip.setPixelColor(i+q, 0);        //turn every third pixel off
-//      }
-//    }
-//  }
-//}
-//
-////Theatre-style crawling lights with rainbow effect
-//void theaterChaseRainbow(uint8_t wait) {
-//  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
-//    for (int q=0; q < 3; q++) {
-//      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-//        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
-//      }
-//      strip.show();
-//
-//      delay(wait);
-//
-//      for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-//        strip.setPixelColor(i+q, 0);        //turn every third pixel off
-//      }
-//    }
-//  }
-//}
-//
-//// Input a value 0 to 255 to get a color value.
-//// The colours are a transition r - g - b - back to r.
-//uint32_t Wheel(byte WheelPos) {
-//  WheelPos = 255 - WheelPos;
-//  if(WheelPos < 85) {
-//    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-//  }
-//  if(WheelPos < 170) {
-//    WheelPos -= 85;
-//    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-//  }
-//  WheelPos -= 170;
-//  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-//}
