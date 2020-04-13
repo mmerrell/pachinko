@@ -9,6 +9,7 @@
 #define MAX_BALLS 8
 #define MAX_SEGMENTS 6
 #define TOTAL_PATHS 5
+#define BRIGHTNESS 123
 #define TIME_BETWEEN_LAUNCH 20  //This is the number of loops, not the actual time
 
 int segments[][2] = {
@@ -35,6 +36,14 @@ int paths[][MAX_SEGMENTS] = {
   { 6, 7, 8, 11, 4, -1 }
 };
 
+//Ball Effects:
+// 0: Just the specified color
+// 1: Cycle through the palette, starting with the specifed color and going around the wheel
+int ballEffects[MAX_BALLS];
+
+const int numPaths = sizeof(paths)/sizeof(int[MAX_SEGMENTS]);
+int pathLengths[numPaths];
+
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
 unsigned char startButtonState = HIGH;
 
@@ -43,7 +52,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ
 //keeps track of which path each ball is on
 int ballPaths[MAX_BALLS];
 
-//keeps track of where the ball is in its path
+//keeps track of where the ball is in its path, as well as the trailing pixels
 int ballPositions[MAX_BALLS];
 int ballPixels[MAX_BALLS];
 int trailingBallPixels1[MAX_BALLS];
@@ -51,7 +60,6 @@ int trailingBallPixels2[MAX_BALLS];
 
 //keeps track of the color of the balls
 uint32_t ballColors[MAX_BALLS];
-
 
 double counter = 0;
 double ignoreStartButtonCounter = 0;
@@ -63,17 +71,31 @@ void initIoPins() {
 }
 
 void initArrays() {
+  //calculate path lengths
+  for (int path=0; path<numPaths; path++) {
+    int pixelCount = 0;
+    int segment = 0;
+    while(paths[path][segment] != -1) {
+      pixelCount += abs(segments[paths[path][segment]][1]);
+      segment++;
+    }
+    pathLengths[path] = pixelCount;
+  }
+
+  //Initialize all balls to "inactive" (-1 is inactive for path and position)
   for (int i=0; i<MAX_BALLS; i++) {
     ballPaths[i] = -1;
     ballPositions[i] = -1;
     ballColors[i] = strip.Color(0, 0, 0);
     trailingBallPixels1[i] = -1;
     trailingBallPixels2[i] = -1;
+    ballEffects[i] = 0;
   }
 }
 
 void initLights() {
   strip.begin();
+  strip.setBrightness(BRIGHTNESS);
   strip.show(); // Initialize all pixels to 'off'
 }
 
@@ -92,13 +114,13 @@ void setup() {
 
 uint32_t getRandomBallColor() {
   uint32_t colorAry[] = {
-    strip.Color(120, 120, 120),
-    strip.Color(120, 0, 120),
-    strip.Color(0, 120, 120),
-    strip.Color(120, 120, 0),
+    strip.Color(255, 255, 255),
+    strip.Color(255, 0, 255),
+    strip.Color(0, 255, 255),
+    strip.Color(255, 255, 0),
     strip.Color(0, 120, 0),
-    strip.Color(50, 120, 50),
-    strip.Color(255, 120, 0)
+    strip.Color(123, 255, 123),
+    strip.Color(255, 123, 0)
   };
 
   return colorAry[random(0, sizeof(colorAry)/sizeof(uint32_t))];
@@ -125,25 +147,24 @@ void loop() {
   delay(WAIT);
 }
 
-void ballLaunch(int path, uint32_t color) {
+void ballLaunch(int path, uint32_t color, int ballEffect) {
   for (int i=0; i<MAX_BALLS; i++) {
     if (ballPositions[i] == -1) {
       ballPaths[i] = path;
       ballPositions[i] = 0;
       ballColors[i] = color;
+      ballEffects[i] = ballEffect;
       return;
     }
   }
 }
 
 void ballLaunch(uint32_t color) {
-  int numPaths = sizeof(paths) / sizeof(int[MAX_SEGMENTS]);
-  ballLaunch(random(0, numPaths), color);
+  ballLaunch(random(0, numPaths), color, 0);
 }
 
 void ballLaunch() {
-  int numPaths = sizeof(paths) / sizeof(int[MAX_SEGMENTS]);
-  ballLaunch(random(0, numPaths), getRandomBallColor());
+  ballLaunch(random(0, numPaths), getRandomBallColor(), random(0, 2));
 }
 
 //Given a path and a position within the path, calculate which pixel to light up
@@ -185,16 +206,19 @@ void updateBalls() {
   for (int i=0; i<MAX_BALLS; i++) {
     //If the position is -1, the ball is inactive
     if (ballPositions[i] != -1) {
-
+      //before we increment the position in the path, set the trailing pixels
       trailingBallPixels2[i] = trailingBallPixels1[i];
       trailingBallPixels1[i] = ballPixels[i];
 
+      //increment the ball's position in the path
       ballPositions[i]++;
       int ballPosition = ballPositions[i];
       int ballPath = ballPaths[i];
-      uint32_t color = ballColors[i];
+      int ballEffect = ballEffects[i];
       int pixel = calcPathPixel(ballPath, ballPosition);
       ballPixels[i] = pixel;
+
+      //If pixel has been calculated as '-1', the ball has been terminated
       if (pixel == -1) {
         ballPaths[i] = -1;
         ballPositions[i] = -1;
@@ -204,6 +228,19 @@ void updateBalls() {
         strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
         return;
       }
+      
+      uint32_t color;
+      switch(ballEffect) {
+        case 1:
+          uint32_t mappedColor = map(ballPositions[i], 0, pathLengths[ballPaths[i]], ballColors[i], ballColors[i] + 65535);
+          int hue = map(ballPositions[i], 0, pathLengths[ballPaths[i]], 123, 255);
+          color = strip.ColorHSV(mappedColor, hue, BRIGHTNESS);
+          break;
+        case 0:
+        default:
+          color = ballColors[i];
+      };
+      
       strip.setPixelColor(pixel, color);
       strip.setPixelColor(trailingBallPixels1[i], strip.Color(10, 10, 10));
       strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
