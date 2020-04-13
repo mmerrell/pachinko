@@ -12,7 +12,9 @@
 #define BRIGHTNESS 123
 #define TIME_BETWEEN_LAUNCH 20  //This is the number of loops, not the actual time
 
-int segments[][2] = {
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+static int segments[][2] = {
   {   0,  120 }, //0
   {   0,   73 }, //1
   { 167,  -14 }, //2
@@ -27,13 +29,23 @@ int segments[][2] = {
   { 200,   20 }  //11
 };
 
-int paths[][MAX_SEGMENTS] = {
+static int paths[][MAX_SEGMENTS] = {
   { 0,              -1 },
   { 1, 2, 3, 4,     -1 },
   { 1, 5,           -1 },
   { 6, 7, 8, 4,     -1 },
   { 6, 7, 9, 10,    -1 },
   { 6, 7, 8, 11, 4, -1 }
+};
+
+static uint32_t colorAry[] = {
+  strip.Color(255, 255, 255),
+  strip.Color(255, 0, 255),
+  strip.Color(0, 255, 255),
+  strip.Color(255, 255, 0),
+  strip.Color(0, 120, 0),
+  strip.Color(123, 255, 123),
+  strip.Color(255, 123, 0)
 };
 
 //Ball Effects:
@@ -46,8 +58,6 @@ int pathLengths[numPaths];
 
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
 unsigned char startButtonState = HIGH;
-
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 //keeps track of which path each ball is on
 int ballPaths[MAX_BALLS];
@@ -68,6 +78,19 @@ boolean startButtonLow;
 //Init all the pins
 void initIoPins() {
   pinMode(START_BUTTON_PIN, INPUT_PULLUP);
+}
+
+void readyAnimation() {
+  for (int i=0; i<2; i++) {
+    strip.fill(strip.Color(50, 0, 50), 0);
+    strip.show();
+    delay(200);
+    strip.clear();
+    strip.show();
+    delay(200);
+  }
+  strip.clear();
+  strip.show();
 }
 
 void initArrays() {
@@ -105,24 +128,15 @@ void updateIoPins() {
 
 void setup() {
 //  Serial.begin(9600);
-//  Serial.println("Ready...");
+  Serial.println("Ready...");
 
   initIoPins();
   initArrays();
   initLights();
+  readyAnimation();
 }
 
 uint32_t getRandomBallColor() {
-  uint32_t colorAry[] = {
-    strip.Color(255, 255, 255),
-    strip.Color(255, 0, 255),
-    strip.Color(0, 255, 255),
-    strip.Color(255, 255, 0),
-    strip.Color(0, 120, 0),
-    strip.Color(123, 255, 123),
-    strip.Color(255, 123, 0)
-  };
-
   return colorAry[random(0, sizeof(colorAry)/sizeof(uint32_t))];
 }
 
@@ -223,7 +237,7 @@ void updateBalls() {
         ballPaths[i] = -1;
         ballPositions[i] = -1;
         ballColors[i] = strip.Color(0, 0, 0);
-        strip.setPixelColor(pixel, strip.Color(0, 0, 0));
+        strip.setPixelColor(pixel, ballColors[i]);
         strip.setPixelColor(trailingBallPixels1[i], strip.Color(0, 0, 0));
         strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
         return;
@@ -233,7 +247,7 @@ void updateBalls() {
       switch(ballEffect) {
         case 1:
           uint32_t mappedColor = map(ballPositions[i], 0, pathLengths[ballPaths[i]], ballColors[i], ballColors[i] + 65535);
-          int hue = map(ballPositions[i], 0, pathLengths[ballPaths[i]], 123, 255);
+          int hue = 255;
           color = strip.ColorHSV(mappedColor, hue, BRIGHTNESS);
           break;
         case 0:
@@ -242,7 +256,7 @@ void updateBalls() {
       };
       
       strip.setPixelColor(pixel, color);
-      strip.setPixelColor(trailingBallPixels1[i], strip.Color(10, 10, 10));
+      strip.setPixelColor(trailingBallPixels1[i], strip.ColorHSV(color, 123, 10));
       strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
     }
   }
