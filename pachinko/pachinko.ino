@@ -5,14 +5,15 @@
 #endif
 
 #define NEOPIXEL_PIN 6
-#define WAIT 5
+#define WAIT 2
 #define MAX_BALLS 8
 #define MAX_SEGMENTS 6
 #define TOTAL_PATHS 5
 #define BRIGHTNESS 123
+#define TOTAL_PIXELS 360
 #define TIME_BETWEEN_LAUNCH 20  //This is the number of loops, not the actual time
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(240, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 static int segments[][2] = {
   {   0,  120 }, //0
@@ -26,16 +27,48 @@ static int segments[][2] = {
   { 168,   33 }, //8
   { 168,    6 }, //9
   { 153,  -34 }, //10
-  { 200,   20 }  //11
+  { 200,   20 }, //11
+  { 264,  -24 }, //12 
+  { 265,   49 }, //13
+  { 168,   10 }, //14
+  { 226,   15 }, //15
+  { 265,   25 }  //16
+};
+
+//Each element of this array corresponds to a segment above, and lists is "connecting segments"
+// -1 is a "non-prize" terminal
+// -2 is a "tulip prize"
+// -3 is the "center prize"
+static int connections[][4] = {
+  {             -1 }, //0
+  { 2, 5,       -1 }, //1
+  { 3,          -1 }, //2
+  { 4,          -1 }, //3
+  {             -1 }, //4
+  {             -1 }, //5
+  { 7,          -1 }, //6
+  { 8, 9, 14,   -1 }, //7
+  { 4, 11,      -1 }, //8
+  { 10,         -1 }, //9
+  {             -1 }, //10
+  { 4,          -1 }, //11
+  {             -1 }, //12 
+  {             -1 }, //13
+  { 12, 13, 16, -1 }, //14
+  {             -1 }, //15
+  { 15,         -1 }  //16
 };
 
 static int paths[][MAX_SEGMENTS] = {
-  { 0,              -1 },
-  { 1, 2, 3, 4,     -1 },
-  { 1, 5,           -1 },
-  { 6, 7, 8, 4,     -1 },
-  { 6, 7, 9, 10,    -1 },
-  { 6, 7, 8, 11, 4, -1 }
+  { 0,                 -1 }, //0
+  { 1,  2,  3,  4,     -1 }, //1
+  { 1,  5,             -1 }, //2
+  { 6,  7,  8,  4,     -1 }, //3
+  { 6,  7,  9, 10,     -1 }, //4
+  { 6,  7,  8, 11,  4, -1 }, //5
+  { 6,  7, 14, 12,     -1 }, //6
+  { 6,  7, 14, 13,     -1 }, //7
+  { 6,  7, 14, 16, 15, -1 }  //8
 };
 
 static uint32_t colorAry[] = {
@@ -127,7 +160,7 @@ void updateIoPins() {
 }
 
 void setup() {
-//  Serial.begin(9600);
+  Serial.begin(9600);
   Serial.println("Ready...");
 
   initIoPins();
@@ -140,6 +173,8 @@ uint32_t getRandomBallColor() {
   return colorAry[random(0, sizeof(colorAry)/sizeof(uint32_t))];
 }
 
+//int pathIdx = 7;
+
 void loop() {
   updateIoPins();
   if (ignoreStartButtonCounter >= TIME_BETWEEN_LAUNCH) {
@@ -149,8 +184,11 @@ void loop() {
       if (startButtonLow) {
         startButtonLow = false;
         ballLaunch();
-//        ballLaunch(5, strip.Color(120, 120, 120));
+//        ballLaunch(pathIdx % numPaths, strip.Color(255, 255, 255), 0);
+//        Serial.print("Path: ");
+//        Serial.println(pathIdx % numPaths);
         ignoreStartButtonCounter = 0;
+//        pathIdx++;
       }
     }
   }
@@ -217,47 +255,47 @@ int calcPathPixel(int ballPath, int ballPosition) {
 }
 
 void updateBalls() {
-  for (int i=0; i<MAX_BALLS; i++) {
+  for (int ballIdx=0; ballIdx<MAX_BALLS; ballIdx++) {
     //If the position is -1, the ball is inactive
-    if (ballPositions[i] != -1) {
+    if (ballPositions[ballIdx] != -1) {
       //before we increment the position in the path, set the trailing pixels
-      trailingBallPixels2[i] = trailingBallPixels1[i];
-      trailingBallPixels1[i] = ballPixels[i];
+      trailingBallPixels2[ballIdx] = trailingBallPixels1[ballIdx];
+      trailingBallPixels1[ballIdx] = ballPixels[ballIdx];
 
       //increment the ball's position in the path
-      ballPositions[i]++;
-      int ballPosition = ballPositions[i];
-      int ballPath = ballPaths[i];
-      int ballEffect = ballEffects[i];
+      ballPositions[ballIdx]++;
+      int ballPosition = ballPositions[ballIdx];
+      int ballPath = ballPaths[ballIdx];
+      int ballEffect = ballEffects[ballIdx];
       int pixel = calcPathPixel(ballPath, ballPosition);
-      ballPixels[i] = pixel;
+      ballPixels[ballIdx] = pixel; //this has to be done after incrementing and calculating the pixel, so the trailing pixels can be set correctly
 
       //If pixel has been calculated as '-1', the ball has been terminated
       if (pixel == -1) {
-        ballPaths[i] = -1;
-        ballPositions[i] = -1;
-        ballColors[i] = strip.Color(0, 0, 0);
-        strip.setPixelColor(pixel, ballColors[i]);
-        strip.setPixelColor(trailingBallPixels1[i], strip.Color(0, 0, 0));
-        strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
+        ballPaths[ballIdx] = -1;
+        ballPositions[ballIdx] = -1;
+        ballColors[ballIdx] = strip.Color(0, 0, 0);
+        strip.setPixelColor(pixel, ballColors[ballIdx]);
+        strip.setPixelColor(trailingBallPixels1[ballIdx], strip.Color(0, 0, 0));
+        strip.setPixelColor(trailingBallPixels2[ballIdx], strip.Color(0, 0, 0));
         return;
       }
       
       uint32_t color;
       switch(ballEffect) {
         case 1:
-          uint32_t mappedColor = map(ballPositions[i], 0, pathLengths[ballPaths[i]], ballColors[i], ballColors[i] + 65535);
+          uint32_t mappedColor = map(ballPositions[ballIdx], 0, pathLengths[ballPaths[ballIdx]], ballColors[ballIdx], ballColors[ballIdx] + 65535);
           int hue = 255;
           color = strip.ColorHSV(mappedColor, hue, BRIGHTNESS);
           break;
         case 0:
         default:
-          color = ballColors[i];
+          color = ballColors[ballIdx];
       };
       
       strip.setPixelColor(pixel, color);
-      strip.setPixelColor(trailingBallPixels1[i], strip.ColorHSV(color, 123, 10));
-      strip.setPixelColor(trailingBallPixels2[i], strip.Color(0, 0, 0));
+      strip.setPixelColor(trailingBallPixels1[ballIdx], strip.ColorHSV(color, 123, 10));
+      strip.setPixelColor(trailingBallPixels2[ballIdx], strip.Color(0, 0, 0));
     }
   }
 
