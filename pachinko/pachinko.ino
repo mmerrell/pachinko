@@ -17,20 +17,28 @@ static int segments[][2] = {
   {   0,  119 }, //0
   {   0,   73 }, //1
   { 167,  -14 }, //2
-  { 174,   27 }, //3
-  { 221,   19 }, //4
+  { 174,   29 }, //3
+  { 223,   17 }, //4
   { 167,  -47 }, //5
   {   0,   78 }, //6
   {  77,   -5 }, //7
   { 168,   33 }, //8
   { 168,    6 }, //9
-  { 153,  -33 }, //10
-  { 200,   20 }, //11
-  { 264,  -24 }, //12 
-  { 265,   49 }, //13
+  { 154,  -34 }, //10
+  { 201,   22 }, //11
+  { 265,  -25 }, //12 
+  { 265,   48 }, //13
   { 168,   10 }, //14
-  { 226,   15 }, //15
-  { 265,   25 }  //16
+  { 227,   14 }, //15
+  { 265,   26 }, //16
+  {  77,  -13 }, //17
+  { 359,   -8 }, //18
+  { 268,   23 }, //19
+  { 181,    1 }, //20
+  { 342,    8 }, //21
+  {   0,   50 }, //22
+  { 182,   13 }, //23
+  { 324,   -9 }, //24
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
@@ -54,7 +62,15 @@ static int connections[][MAX_CONNECTIONS] = {
   {             -1 }, //13
   { 12, 13, 16, -1 }, //14
   {             -1 }, //15
-  { 15,         -1 }  //16
+  { 15,         -1 }, //16
+  { 18,         -1 }, //17
+  { 20,         -1 }, //18
+  { 15,         -1 }, //19
+  { 19, 23,     -1 }, //20
+  { 20,         -1 }, //21
+  { 21,         -1 }, //22
+  { 24,         -1 }, //23
+  {             -1 }, //24
 };
 
 static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
@@ -148,7 +164,7 @@ void updateIoPins() {
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("Ready...");
+  Serial.println(F("Ready..."));
 
   initIoPins();
   initArrays();
@@ -168,7 +184,7 @@ void loop() {
     } else {
       if (startButtonLow) {
         startButtonLow = false;
-        Serial.println("Launching Ball!!!");
+        Serial.println(F("Launching Ball!!!"));
         ballLaunch();
         ignoreStartButtonCounter = 0;
       }
@@ -176,6 +192,7 @@ void loop() {
   }
 
   updateBalls();
+  strip.show();
   ignoreStartButtonCounter++;
   delay(WAIT);
 }
@@ -184,7 +201,7 @@ void ballLaunch(uint32_t color, int ballEffect) {
   for (int i=0; i<MAX_BALLS; i++) {
     if (ballPositions[i] == -1) {
       ballSegments[i] = startingSegments[random(0, 3)];
-      sprintf(data, "Choosing new segment for ball %d: %d", i, ballSegments[i]);
+      sprintf_P(data, PSTR("Choosing new segment for ball %d: %d"), i, ballSegments[i]);
       Serial.println(data);
       ballPositions[i] = 0;
       ballColors[i] = color;
@@ -206,8 +223,6 @@ void updateBalls() {
   for (int ballIdx=0; ballIdx<MAX_BALLS; ballIdx++) {
     //If the position is -1, the ball is inactive
     if (ballPositions[ballIdx] != -1) {
-//      sprintf(data, "Checkpoint 0: ball %d is active in segment %d, position %d, pixel %d", ballIdx, ballSegments[ballIdx], ballPositions[ballIdx], ballPixels[ballIdx]);
-//      Serial.println(data);
       
       //before we increment the position in the path, set the trailing pixels
       trailingBallPixels2[ballIdx] = trailingBallPixels1[ballIdx];
@@ -220,31 +235,22 @@ void updateBalls() {
 
       if (segments[ballSegments[ballIdx]][1] >= 0) {
         ballPixels[ballIdx] = segments[ballSegments[ballIdx]][0] + ballPositions[ballIdx];
-//        sprintf(data, "Incrementing: Ball %d to position %d: %d", ballIdx, ballPositions[ballIdx], ballPixels[ballIdx]);
-//        Serial.println(data);
       } else {
         ballPixels[ballIdx] = segments[ballSegments[ballIdx]][0] - ballPositions[ballIdx];
-//        sprintf(data, "Decrementing: Ball %d to position %d: %d", ballIdx, ballPositions[ballIdx], ballPixels[ballIdx]);
-//        Serial.println(data);
       }
 
       //We've determined which pixel to light, now determine whether 
       //we're at the end of the segment, and if so, determine the new segment
-//      sprintf(data, "Ball %d, Segment %d, Starting pixel %d, Length %d, Position %d", ballIdx, ballSegments[ballIdx], segments[ballSegments[ballIdx]][0], segments[ballSegments[ballIdx]][1], ballPositions[ballIdx]);
-//      Serial.println(data);
       if (ballPositions[ballIdx] == abs(segments[ballSegments[ballIdx]][1])) {
-        sprintf(data, "Current Segment %d, Position %d", ballSegments[ballIdx], ballPositions[ballIdx]);
+        sprintf_P(data, PSTR("Current Segment %d, Position %d"), ballSegments[ballIdx], ballPositions[ballIdx]);
         Serial.println(data);
         if (connectionCounts[ballSegments[ballIdx]] == 0) {
           ballPositions[ballIdx] = -1;
           ballSegments[ballIdx] = -1;
           ballColors[ballIdx] = strip.Color(0, 0, 0);
           strip.setPixelColor(ballPixels[ballIdx], ballColors[ballIdx]);
-          strip.setPixelColor(trailingBallPixels1[ballIdx], strip.Color(0, 0, 0));
-          strip.setPixelColor(trailingBallPixels2[ballIdx], strip.Color(0, 0, 0));
-          strip.show();
-//          sprintf(data, "Ball %d terminated\n\tPixel: %d\n\tTrailing 1: %d\n\tTrailing 2: %d", ballIdx, ballPixels[ballIdx], trailingBallPixels1[ballIdx], trailingBallPixels2[ballIdx]);
-//          Serial.println(data);
+          strip.setPixelColor(trailingBallPixels1[ballIdx], ballColors[ballIdx]);
+          strip.setPixelColor(trailingBallPixels2[ballIdx], ballColors[ballIdx]);
           return;
         } else {
           ballPositions[ballIdx] = 0;
@@ -259,16 +265,4 @@ void updateBalls() {
       strip.setPixelColor(trailingBallPixels2[ballIdx], strip.Color(0, 0, 0));
     }
   }
-
-  strip.show();
 }
-
-//void lightPath(int pathIdx) {
-//  int index = 0;
-//  while (paths[pathIdx][index] != -1) {
-//    strip.setPixelColor(paths[pathIdx][index], strip.Color(10, 10, 10));
-//    index++;
-//  }
-//  strip.show();
-//  delay(60000);
-//}
