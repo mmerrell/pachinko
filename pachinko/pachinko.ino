@@ -6,10 +6,10 @@
 
 #define NEOPIXEL_PIN        6
 #define WAIT                5
-#define MAX_BALLS           5
+#define MAX_BALLS           3
 #define BRIGHTNESS          123
 #define TOTAL_PIXELS        360
-#define TIME_BETWEEN_LAUNCH 3  //The number of loops, not the actual time
+#define TIME_BETWEEN_LAUNCH 30  //The number of loops, not the actual time
 #define MAX_CONNECTIONS     4
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -39,6 +39,9 @@ static int segments[][2] = {
   {   0,   50 }, //22
   { 182,   13 }, //23
   { 324,   -9 }, //24
+  { 206,   17 }, //25
+  {   0,   41 }, //26
+  { 333,  -18 }, //27
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
@@ -70,10 +73,13 @@ static int connections[][MAX_CONNECTIONS] = {
   { 20,         -1 }, //21
   { 21,         -1 }, //22
   { 24,         -1 }, //23
-  {             -1 }, //24
+  { 25,         -1 }, //24
+  { 4,          -1 }, //25
+  { 27,         -1 }, //26
+  { 25,         -1 }, //27
 };
 
-static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
+static byte connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
 
 static uint32_t colorAry[] = {
   strip.Color(255, 255, 255),
@@ -90,16 +96,16 @@ char data[100];
 //Ball Effects:
 // 0: Just the specified color
 // 1: Cycle through the palette, starting with the specifed color and going around the wheel
-int ballEffects[MAX_BALLS];
+byte ballEffects[MAX_BALLS];
 
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
 unsigned char startButtonState = HIGH;
 
 //keeps track of which segment each ball is on
-int ballSegments[MAX_BALLS];
+byte ballSegments[MAX_BALLS];
 
 //Which segments can be starting points
-int startingSegments[3] = { 0, 1, 6 };
+byte startingSegments[] = { 0, 1, 6, 22, 26 };
 
 //keeps track of where the ball is in its path, as well as the trailing pixels
 int ballPositions[MAX_BALLS];
@@ -119,7 +125,7 @@ void initIoPins() {
 }
 
 void readyAnimation() {
-  for (int i=0; i<2; i++) {
+  for (byte i=0; i<2; i++) {
     strip.fill(strip.Color(50, 0, 50), 0);
     strip.show();
     delay(200);
@@ -163,7 +169,7 @@ void updateIoPins() {
 }
 
 void setup() {
-  Serial.begin(9600);
+//  Serial.begin(9600);
   Serial.println(F("Ready..."));
 
   initIoPins();
@@ -200,7 +206,7 @@ void loop() {
 void ballLaunch(uint32_t color, int ballEffect) {
   for (int i=0; i<MAX_BALLS; i++) {
     if (ballPositions[i] == -1) {
-      ballSegments[i] = startingSegments[random(0, 3)];
+      ballSegments[i] = startingSegments[random(0, sizeof(startingSegments))];
       sprintf_P(data, PSTR("Choosing new segment for ball %d: %d"), i, ballSegments[i]);
       Serial.println(data);
       ballPositions[i] = 0;

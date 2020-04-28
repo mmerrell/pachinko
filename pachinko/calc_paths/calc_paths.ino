@@ -12,7 +12,7 @@
 #define MAX_CONNECTIONS     4
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-const static int segments[][2] = {
+const int segments[][2] PROGMEM = {
   {   0,  119 }, //0
   {   0,   73 }, //1
   { 167,  -14 }, //2
@@ -38,13 +38,16 @@ const static int segments[][2] = {
   {   0,   50 }, //22
   { 182,   13 }, //23
   { 324,   -9 }, //24
+  { 206,   17 }, //25
+  {   0,   41 }, //26
+  { 333,  -18 }, //27
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
 // -1 is a "non-prize" terminal
 // -2 is a "tulip prize"
 // -3 is the "center prize"
-const static int connections[][MAX_CONNECTIONS] = {
+const char connections[][MAX_CONNECTIONS] PROGMEM = {
   {             -1 }, //0
   { 2, 5,       -1 }, //1
   { 3,          -1 }, //2
@@ -69,7 +72,10 @@ const static int connections[][MAX_CONNECTIONS] = {
   { 20,         -1 }, //21
   { 21,         -1 }, //22
   { 24,         -1 }, //23
-  {             -1 }, //24
+  { 25,         -1 }, //24
+  { 4,          -1 }, //25
+  { 27,         -1 }, //26
+  { 25,         -1 }, //27
 };
 
 static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
@@ -79,9 +85,6 @@ char data[100];
 
 const unsigned char START_BUTTON_PIN = 8;         //Not PWM
 unsigned char startButtonState = HIGH;
-
-//Which segments can be starting points
-int startingSegments[] = { 0, 1, 6 };
 
 double ignoreStartButtonCounter = 0;
 boolean startButtonLow;
@@ -106,9 +109,10 @@ void readyAnimation() {
 
 void initArrays() {
   //build the array that keeps track of how many connections each segment has
-  for (int i=0; i<(sizeof(segments)/sizeof(int[2])); i++) {
+  for (int i=0; i<28; i++) {
     for (int j=0; j<MAX_CONNECTIONS; j++) {
-      if (connections[i][j] < 0) {
+      int segment = pgm_read_word(&connections[i][j]);
+      if (segment < 0) {
         connectionCounts[i] = j;
       }
     }
@@ -168,24 +172,32 @@ void loop() {
 uint32_t forward = strip.Color(0, 100, 0);
 uint32_t backward = strip.Color(100, 0, 0);
 void lightSegment(int seg, int segDepth) {
-  sprintf_P(data, PSTR("Lighting Segment %d of %d"), seg, numSegments);
+  int start = pgm_read_word(&segments[seg][0]);
+  int segLength = pgm_read_word(&segments[seg][1]);
+  sprintf_P(data, PSTR("Lighting Segment %d:\n\t{ %d, %d }, depth %d"), seg, start, segLength, segDepth);
   Serial.println(data);
   
-  if (segments[seg][1] > 0) {
-    strip.fill(forward, segments[seg][0], segments[seg][1]);
+  if (segLength > 0) {
+    strip.fill(forward + (segDepth + (seg * 10000)), start, segLength);
   } else {
-    strip.fill(backward, segments[seg][0] + segments[seg][1], abs(segments[seg][1]));
+    strip.fill(backward - (segDepth + (seg * 10000)), start + segLength, abs(segLength));
   }
   strip.show();
 
   if (segDepth > 0) {
+    if (segDepth == 0) {
+      Serial.println(F("segDepth is 0. I don't know how we made it to this block"));
+    } else {
+      Serial.println(segDepth);
+    }
     int segIdx = 0;
-    sprintf_P(data, PSTR("Current Segment is %d, Depth is %d. Lighting next segment: idx %d, %d"), seg, segDepth, segIdx, connections[seg][segIdx]);
+    char segConnection = pgm_read_word(&connections[seg][segIdx]);
+    sprintf_P(data, PSTR("Current Segment is %d, Depth is %d. Lighting next segment: idx %d, %d"), seg, segDepth, segIdx, segConnection);
     Serial.println(data);
-    while (connections[seg][segIdx] >= 0) {
-      sprintf_P(data, PSTR("Lighting segment idx %d, Segment %d, Depth %d"), segIdx, connections[seg][segIdx], segDepth - 1);
+    while (segConnection >= 0) {
+      sprintf_P(data, PSTR("Lighting %d: Segment %d, Depth %d"), segIdx, segConnection, segDepth - 1);
       Serial.println(data);
-      lightSegment(connections[seg][segIdx], segDepth - 1);
+      lightSegment(segConnection, 0);
       segIdx++;
     }
   } else {

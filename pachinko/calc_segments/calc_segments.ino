@@ -29,7 +29,7 @@ void readyAnimation() {
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("Ready...");
+  Serial.println(F("Ready..."));
 
   initLights();
   readyAnimation();
@@ -67,7 +67,7 @@ uint32_t forward = strip.Color(0, 100, 0);
 uint32_t backward = strip.Color(100, 0, 0);
 void lightSegment(int start, int segLength) {
   strip.clear();
-  sprintf(data, "Segment: { %d, %d }", start, segLength);
+  sprintf_P(data, PSTR("Segment: { %d, %d }"), start, segLength);
   Serial.println(data);
   
   if (segLength > 0) {
