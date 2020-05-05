@@ -1,50 +1,64 @@
+#define POSITION_0_PIN 10
+#define POSITION_1_PIN 11
+#define POSITION_2_PIN 12
+#define POSITION_3_PIN 13
+
 void setup() {
   Serial.begin(115200);
-  pinMode(2, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
+  Serial.println(F("Ready..."));
+  pinMode(POSITION_0_PIN, INPUT_PULLUP);
+  pinMode(POSITION_1_PIN, INPUT_PULLUP);
+  pinMode(POSITION_2_PIN, INPUT_PULLUP);
+  pinMode(POSITION_3_PIN, INPUT_PULLUP);
 }
 
-int val2 = 0;
-int val3 = 0;
 int offPosition = LOW;
 int prevOffPosition = LOW;
 bool launching = false;
-byte highestLaunchPosition = 0;
+byte ballSpeed = 0;
 
 void loop() {
-  val2 = digitalRead(2);
-  val3 = digitalRead(3);
-  offPosition= digitalRead(4);
-  
-  if (val2 == LOW) {
-    Serial.println(F("LEFT"));
-  }
-  
-  if (val3 == LOW) {
-    Serial.println(F("CENTER"));
-  }
+  offPosition=digitalRead(POSITION_0_PIN);
 
   //if the handle is pulled back, measure the highest Hall sensor it's triggered
   if (launching) {
-
-    if (
-    launching = false;
-    //Using the "highest Hall triggered" number, launch the ball at a certain velocity
-    //ballLaunch();//color, effect, speed
-    highestLaunchPosition = 0;
     if (offPosition == LOW) {
+      //Using the "highest Hall triggered" number, launch the ball at a certain velocity
+      Serial.print(F("Ball Speed: "));
+      Serial.print(ballSpeed, BIN);
+      Serial.println(F("\nLAUNCHING!!!"));
+      //ballLaunch(ballSpeed);//color, effect, speed
+      ballSpeed = 0;
+      launching = false;
+    }
+    //Only need to check these switches if we're "underway"
+    int position1 = digitalRead(POSITION_1_PIN);
+    int position2 = digitalRead(POSITION_2_PIN);
+    int position3 = digitalRead(POSITION_3_PIN);
+
+    if (position3 == LOW) {
+      ballSpeed |= 4; //00000100
+      Serial.println(F("POSITION 3"));
+    }
+    if (position2 == LOW) {
+      ballSpeed |= 2; //00000010
+      Serial.println(F("POSITION 2"));
+    }
+    if (position1 == LOW) {
+      ballSpeed |= 1; //00000001
+      Serial.println(F("POSITION 1"));
     }
   } else {
-    if (offPosition == LOW) { // offPosition LOW means that the handle is DOWN
+    if (offPosition == LOW) { //offPosition LOW means the handle is AT REST
       if (prevOffPosition == HIGH) {
         //The handle has been brought back to the lowest position
         Serial.println(F("OFF"));
         prevOffPosition = LOW;
       }
+      //Do nothing--we're waiting for the handle to be pulled back
     } else {
-      //Launching
-      Serial.println(F("LAUNCH"));
+      //Launching - if they let go of the handle before it hits another magnet, it will be the slowest speed
+      Serial.println(F("POSITION 0"));
       prevOffPosition = HIGH;
       launching = true;
     }
