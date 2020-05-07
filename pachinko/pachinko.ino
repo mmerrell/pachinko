@@ -49,6 +49,8 @@ static int segments[][2] = {
   { 206,   17 }, //25
   {   0,   41 }, //26
   { 333,  -18 }, //27
+  {   0,   32 }, //28
+  {  33,  -32 }, //29
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
@@ -84,6 +86,8 @@ static int connections[][MAX_CONNECTIONS] = {
   { 4,          -1 }, //25
   { 27,         -1 }, //26
   { 25,         -1 }, //27
+  { 29,         -1 }, //28
+  {             -1 }, //29  
 };
 
 static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
@@ -112,7 +116,12 @@ int ballSpeeds[MAX_BALLS];
 int ballSegments[MAX_BALLS];
 
 //Which segments can be starting points
-byte startingSegments[] = { 0, 1, 6, 22, 26 };
+byte startingSegmentsSpeed0[] = { 28 };
+byte startingSegmentsSpeed1[] = { 26, 22 };
+byte startingSegmentsSpeed2[] = { 6 };
+byte startingSegmentsSpeed3[] = { 0, 1 };
+
+
 
 //keeps track of where the ball is in its path, as well as the trailing pixels
 int ballPositions[MAX_BALLS];
@@ -191,7 +200,7 @@ void checkLaunch() {
       Serial.print(F("Ball Speed: "));
       Serial.print(ballSpeed, BIN);
       Serial.println(F("\nLAUNCHING!!!"));
-      ballLaunch();//speed, color, effect
+      ballLaunch(ballSpeed);//speed, color, effect
       ballSpeed = 0;
       launching = false;
     }
@@ -227,7 +236,6 @@ void checkLaunch() {
       launching = true;
     }
   }
-
 }
 
 void setup() {
@@ -262,7 +270,20 @@ void loop() {
 void ballLaunch(byte ballSpeed, uint32_t color, int ballEffect) {
   for (int ballIdx=0; ballIdx<MAX_BALLS; ballIdx++) {
     if (ballPositions[ballIdx] == -1) {
-      ballSegments[ballIdx] = startingSegments[random(0, sizeof(startingSegments))];
+      if (ballSpeed == 0) {      
+        Serial.println(F("BallSpeed 0"));
+        ballSegments[ballIdx] = startingSegmentsSpeed0[random(0, sizeof(startingSegmentsSpeed0))];
+      } else if (ballSpeed & 4) {
+        Serial.println(F("BallSpeed 3"));
+        ballSegments[ballIdx] = startingSegmentsSpeed3[random(0, sizeof(startingSegmentsSpeed3))];
+      } else if (ballSpeed & 2) {
+        Serial.println(F("BallSpeed 2"));
+        ballSegments[ballIdx] = startingSegmentsSpeed2[random(0, sizeof(startingSegmentsSpeed2))];
+      } else if (ballSpeed & 1) {
+        Serial.println(F("BallSpeed 1"));
+        ballSegments[ballIdx] = startingSegmentsSpeed1[random(0, sizeof(startingSegmentsSpeed1))];
+      }
+      
       sprintf_P(data, PSTR("Choosing initial segment for ball %d: %d"), ballIdx, ballSegments[ballIdx]);
       Serial.println(data);
       ballPositions[ballIdx] = 0;
