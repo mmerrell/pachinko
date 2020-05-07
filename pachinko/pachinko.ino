@@ -11,6 +11,13 @@
 #define TOTAL_PIXELS        360
 #define TIME_BETWEEN_LAUNCH 30  //The number of loops, not the actual time
 #define MAX_CONNECTIONS     4
+
+#define POSITION_0_PIN      10  //Hall effect sensor, under handle at REST position
+#define POSITION_1_PIN      11  //Hall effect 1
+#define POSITION_2_PIN      12  //Hall effect 2
+#define POSITION_3_PIN      13  //Hall effect 3
+#define POSITION_4_PIN      8   //The actual switch, indicating MAX POWER
+
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 static int segments[][2] = {
@@ -45,10 +52,10 @@ static int segments[][2] = {
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
-// -1 is a "non-prize" terminal
+// -1 is a "non-prize" terminal (or another segment)
 // -2 is a "tulip prize"
 // -3 is the "center prize"
-static int connections[][MAX_CONNECTIONS] = {
+static char connections[][MAX_CONNECTIONS] = {
   {             -1 }, //0
   { 2, 5,       -1 }, //1
   { 3,          -1 }, //2
@@ -98,7 +105,9 @@ char data[100];
 // 1: Cycle through the palette, starting with the specifed color and going around the wheel
 byte ballEffects[MAX_BALLS];
 
-const unsigned char START_BUTTON_PIN = 8;         //Not PWM
+//Each ball has its own speed, which will (eventually) determine its path selection
+byte ballSpeeds[MAX_BALLS];
+
 unsigned char startButtonState = HIGH;
 
 //keeps track of which segment each ball is on
@@ -121,7 +130,11 @@ boolean startButtonLow;
 
 //Init all the pins
 void initIoPins() {
-  pinMode(START_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(POSITION_0_PIN, INPUT_PULLUP);
+  pinMode(POSITION_1_PIN, INPUT_PULLUP);
+  pinMode(POSITION_2_PIN, INPUT_PULLUP);
+  pinMode(POSITION_3_PIN, INPUT_PULLUP);
+  pinMode(POSITION_4_PIN, INPUT_PULLUP);
 }
 
 void readyAnimation() {
@@ -164,12 +177,63 @@ void initLights() {
   strip.show(); // Initialize all pixels to 'off'
 }
 
-void updateIoPins() {
-  startButtonState = digitalRead(START_BUTTON_PIN);
+//Launch variables
+int offPosition = LOW;     //TODO - change to byte during optimization - this could potentially be a local
+int prevOffPosition = LOW; //TODO - change to byte during optimization
+bool launching = false;
+byte ballSpeed = 0;
+
+void checkLaunch() {
+  offPosition = digitalRead(POSITION_0_PIN);
+
+  //if the handle is pulled back, measure the highest Hall sensor it's triggered
+  if (launching) {
+    if (offPosition == LOW) {
+      //Using the "highest Hall triggered" number, launch the ball at a certain velocity
+      Serial.print(F("Ball Speed: "));
+      Serial.print(ballSpeed, BIN);
+      Serial.println(F("\nLAUNCHING!!!"));
+      ballLaunch(ballSpeed);//speed, color, effect
+      ballSpeed = 0;
+      launching = false;
+    }
+    //Only need to check these switches if we're "underway"
+    int position1 = digitalRead(POSITION_1_PIN);
+    int position2 = digitalRead(POSITION_2_PIN);
+    int position3 = digitalRead(POSITION_3_PIN);
+
+    if (position3 == LOW) {
+      ballSpeed |= 4; //00000100
+      Serial.println(F("POSITION 3"));
+    }
+    if (position2 == LOW) {
+      ballSpeed |= 2; //00000010
+      Serial.println(F("POSITION 2"));
+    }
+    if (position1 == LOW) {
+      ballSpeed |= 1; //00000001
+      Serial.println(F("POSITION 1"));
+    }
+  } else {
+    if (offPosition == LOW) { //offPosition LOW means the handle is AT REST
+      if (prevOffPosition == HIGH) {
+        //The handle has been brought back to the lowest position
+        Serial.println(F("OFF"));
+        prevOffPosition = LOW;
+      }
+      //Do nothing--we're waiting for the handle to be pulled back
+    } else {
+      //Launching - if they let go of the handle before it hits another magnet, it will be the slowest speed
+      Serial.println(F("POSITION 0"));
+      prevOffPosition = HIGH;
+      launching = true;
+    }
+  }
+
 }
 
 void setup() {
-//  Serial.begin(9600);
+  Serial.begin(9600);
   Serial.println(F("Ready..."));
 
   initIoPins();
@@ -182,20 +246,15 @@ uint32_t getRandomBallColor() {
   return colorAry[random(0, sizeof(colorAry)/sizeof(uint32_t))];
 }
 
+
 void loop() {
-  updateIoPins();
+
+  //Don't even check for a launch if it hasn't been long enough
   if (ignoreStartButtonCounter >= TIME_BETWEEN_LAUNCH) {
-    if (startButtonState == LOW) {
-      startButtonLow = true;
-    } else {
-      if (startButtonLow) {
-        startButtonLow = false;
-        Serial.println(F("Launching Ball!!!"));
-        ballLaunch();
-        ignoreStartButtonCounter = 0;
-      }
-    }
+    checkLaunch();
   }
+  //End of Launch Sequence
+
 
   updateBalls();
   strip.show();
@@ -203,26 +262,27 @@ void loop() {
   delay(WAIT);
 }
 
-void ballLaunch(uint32_t color, int ballEffect) {
-  for (int i=0; i<MAX_BALLS; i++) {
-    if (ballPositions[i] == -1) {
-      ballSegments[i] = startingSegments[random(0, sizeof(startingSegments))];
-      sprintf_P(data, PSTR("Choosing new segment for ball %d: %d"), i, ballSegments[i]);
+void ballLaunch(byte ballSpeed, uint32_t color, int ballEffect) {
+  for (int ballIdx=0; ballIdx<MAX_BALLS; ballIdx++) {
+    if (ballPositions[ballIdx] == -1) {
+      ballSegments[ballIdx] = startingSegments[random(0, sizeof(startingSegments))];
+      sprintf_P(data, PSTR("Choosing new segment for ball %d: %d"), ballIdx, ballSegments[ballIdx]);
       Serial.println(data);
-      ballPositions[i] = 0;
-      ballColors[i] = color;
-      ballEffects[i] = ballEffect;
+      ballPositions[ballIdx] = 0;
+      ballSpeeds[ballIdx] = ballSpeed;
+      ballColors[ballIdx] = color;
+      ballEffects[ballIdx] = ballEffect;
       return;
     }
   }
 }
 
-void ballLaunch(uint32_t color) {
-  ballLaunch(color, 0);
+void ballLaunch(byte ballSpeed, uint32_t color) {
+  ballLaunch(ballSpeed, color, 0);
 }
 
-void ballLaunch() {
-  ballLaunch(getRandomBallColor(), random(0, 2));
+void ballLaunch(byte ballSpeed) {
+  ballLaunch(ballSpeed, getRandomBallColor(), random(0, 2));
 }
 
 void updateBalls() {
@@ -237,7 +297,7 @@ void updateBalls() {
       //increment the ball's position in the path
       ballPositions[ballIdx]++;
       
-      int ballEffect = ballEffects[ballIdx];
+      byte ballEffect = ballEffects[ballIdx];
 
       if (segments[ballSegments[ballIdx]][1] >= 0) {
         ballPixels[ballIdx] = segments[ballSegments[ballIdx]][0] + ballPositions[ballIdx];
