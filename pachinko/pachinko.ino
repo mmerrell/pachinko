@@ -55,7 +55,7 @@ static int segments[][2] = {
 // -1 is a "non-prize" terminal (or another segment)
 // -2 is a "tulip prize"
 // -3 is the "center prize"
-static char connections[][MAX_CONNECTIONS] = {
+static int connections[][MAX_CONNECTIONS] = {
   {             -1 }, //0
   { 2, 5,       -1 }, //1
   { 3,          -1 }, //2
@@ -86,7 +86,7 @@ static char connections[][MAX_CONNECTIONS] = {
   { 25,         -1 }, //27
 };
 
-static byte connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
+static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
 
 static uint32_t colorAry[] = {
   strip.Color(255, 255, 255),
@@ -106,12 +106,10 @@ char data[100];
 byte ballEffects[MAX_BALLS];
 
 //Each ball has its own speed, which will (eventually) determine its path selection
-byte ballSpeeds[MAX_BALLS];
-
-unsigned char startButtonState = HIGH;
+int ballSpeeds[MAX_BALLS];
 
 //keeps track of which segment each ball is on
-byte ballSegments[MAX_BALLS];
+int ballSegments[MAX_BALLS];
 
 //Which segments can be starting points
 byte startingSegments[] = { 0, 1, 6, 22, 26 };
@@ -193,7 +191,7 @@ void checkLaunch() {
       Serial.print(F("Ball Speed: "));
       Serial.print(ballSpeed, BIN);
       Serial.println(F("\nLAUNCHING!!!"));
-      ballLaunch(ballSpeed);//speed, color, effect
+      ballLaunch();//speed, color, effect
       ballSpeed = 0;
       launching = false;
     }
@@ -248,7 +246,6 @@ uint32_t getRandomBallColor() {
 
 
 void loop() {
-
   //Don't even check for a launch if it hasn't been long enough
   if (ignoreStartButtonCounter >= TIME_BETWEEN_LAUNCH) {
     checkLaunch();
@@ -266,7 +263,7 @@ void ballLaunch(byte ballSpeed, uint32_t color, int ballEffect) {
   for (int ballIdx=0; ballIdx<MAX_BALLS; ballIdx++) {
     if (ballPositions[ballIdx] == -1) {
       ballSegments[ballIdx] = startingSegments[random(0, sizeof(startingSegments))];
-      sprintf_P(data, PSTR("Choosing new segment for ball %d: %d"), ballIdx, ballSegments[ballIdx]);
+      sprintf_P(data, PSTR("Choosing initial segment for ball %d: %d"), ballIdx, ballSegments[ballIdx]);
       Serial.println(data);
       ballPositions[ballIdx] = 0;
       ballSpeeds[ballIdx] = ballSpeed;
@@ -283,6 +280,10 @@ void ballLaunch(byte ballSpeed, uint32_t color) {
 
 void ballLaunch(byte ballSpeed) {
   ballLaunch(ballSpeed, getRandomBallColor(), random(0, 2));
+}
+
+void ballLaunch() {
+  ballLaunch(0, getRandomBallColor(), random(0, 2));
 }
 
 void updateBalls() {
