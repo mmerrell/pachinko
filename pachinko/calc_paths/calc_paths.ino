@@ -41,6 +41,8 @@ const int segments[][2] PROGMEM = {
   { 206,   17 }, //25
   {   0,   41 }, //26
   { 333,  -18 }, //27
+  {   0,   16 }, //28
+  {  17,  -17 }, //29
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
@@ -76,6 +78,8 @@ const char connections[][MAX_CONNECTIONS] PROGMEM = {
   { 4,          -1 }, //25
   { 27,         -1 }, //26
   { 25,         -1 }, //27
+  { 29,         -1 }, //28
+  {             -1 }, //29 
 };
 
 static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];

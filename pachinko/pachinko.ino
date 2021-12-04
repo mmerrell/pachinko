@@ -5,12 +5,13 @@
 #endif
 
 #define NEOPIXEL_PIN        6
-#define WAIT                5
+#define WAIT                2
 #define MAX_BALLS           3
 #define BRIGHTNESS          123
 #define TOTAL_PIXELS        360
-#define TIME_BETWEEN_LAUNCH 30  //The number of loops, not the actual time
+#define TIME_BETWEEN_LAUNCH 60  //The number of loops, not the actual time
 #define MAX_CONNECTIONS     4
+#define PRIZE_PIN           5
 
 #define POSITION_0_PIN      10  //Hall effect sensor, under handle at REST position
 #define POSITION_1_PIN      11  //Hall effect 1
@@ -19,8 +20,9 @@
 #define POSITION_4_PIN      8   //The actual switch, indicating MAX POWER
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(16, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-static int segments[][2] = {
+const static int segments[][2] = {
   {   0,  119 }, //0
   {   0,   73 }, //1
   { 167,  -14 }, //2
@@ -49,15 +51,15 @@ static int segments[][2] = {
   { 206,   17 }, //25
   {   0,   41 }, //26
   { 333,  -18 }, //27
-  {   0,   32 }, //28
-  {  33,  -32 }, //29
+  {   0,   16 }, //28
+  {  17,  -17 }, //29
 };
 
 //Each element of this array corresponds to a segment above, and lists is "connecting segments"
 // -1 is a "non-prize" terminal (or another segment)
 // -2 is a "tulip prize"
 // -3 is the "center prize"
-static int connections[][MAX_CONNECTIONS] = {
+const static char connections[][MAX_CONNECTIONS] = {
   {             -1 }, //0
   { 2, 5,       -1 }, //1
   { 3,          -1 }, //2
@@ -90,7 +92,7 @@ static int connections[][MAX_CONNECTIONS] = {
   {             -1 }, //29  
 };
 
-static int connectionCounts[sizeof(connections)/sizeof(int[MAX_CONNECTIONS])];
+static byte connectionCounts[sizeof(connections)/sizeof(char[MAX_CONNECTIONS])];
 
 static uint32_t colorAry[] = {
   strip.Color(255, 255, 255),
@@ -110,10 +112,10 @@ char data[100];
 byte ballEffects[MAX_BALLS];
 
 //Each ball has its own speed, which will (eventually) determine its path selection
-int ballSpeeds[MAX_BALLS];
+byte ballSpeeds[MAX_BALLS];
 
 //keeps track of which segment each ball is on
-int ballSegments[MAX_BALLS];
+char ballSegments[MAX_BALLS];
 
 //Which segments can be starting points
 byte startingSegmentsSpeed0[] = { 28 };
@@ -170,7 +172,7 @@ void initArrays() {
 
   //build the array that keeps track of how many connections each segment has
   for (int i=0; i<(sizeof(segments)/sizeof(int[2])); i++) {
-    for (int j=0; j<MAX_CONNECTIONS; j++) {
+    for (byte j=0; j<MAX_CONNECTIONS; j++) {
       if (connections[i][j] < 0) {
         connectionCounts[i] = j;
       }
@@ -185,8 +187,8 @@ void initLights() {
 }
 
 //Launch variables
-int offPosition = LOW;     //TODO - change to byte during optimization - this could potentially be a local
-int prevOffPosition = LOW; //TODO - change to byte during optimization
+byte offPosition = LOW;     //TODO - change to byte during optimization - this could potentially be a local
+byte prevOffPosition = LOW; //TODO - change to byte during optimization
 bool launching = false;
 byte ballSpeed = 0;
 
